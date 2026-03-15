@@ -61,80 +61,53 @@ SecondaryApp secondaryApp;
 
 static void sendKeyToApp(SBApplication *app, AppType appType, int keyCode)
 {
-    switch (appType)
+    SEL action = nil;
+    switch (keyCode)
     {
-        case AppTypeSpotify:
-        {
-            SpotifyApplication *spotify = (SpotifyApplication *)app;
-            switch (keyCode)
-            {
-                case NX_KEYTYPE_PLAY:
-                    [spotify playpause];
-                    break;
-                case NX_KEYTYPE_NEXT:
-                case NX_KEYTYPE_FAST:
-                    [spotify nextTrack];
-                    break;
-                case NX_KEYTYPE_PREVIOUS:
-                case NX_KEYTYPE_REWIND:
-                    [spotify previousTrack];
-                    break;
-            }
+        case NX_KEYTYPE_PLAY:
+            action = @selector(playpause);
             break;
-        }
-        case AppTypeMusic:
-        {
-            iTunesApplication *music = (iTunesApplication *)app;
-            switch (keyCode)
-            {
-                case NX_KEYTYPE_PLAY:
-                    [music playpause];
-                    break;
-                case NX_KEYTYPE_NEXT:
-                case NX_KEYTYPE_FAST:
-                    [music nextTrack];
-                    break;
-                case NX_KEYTYPE_PREVIOUS:
-                case NX_KEYTYPE_REWIND:
-                    [music backTrack];
-                    break;
-            }
+        case NX_KEYTYPE_NEXT:
+        case NX_KEYTYPE_FAST:
+            action = @selector(nextTrack);
             break;
-        }
-        case AppTypeEndel:
-        {
-            EndelApplication *endel = (EndelApplication *)app;
-            switch (keyCode)
-            {
-                case NX_KEYTYPE_PLAY:
-                    [endel playpause];
-                    break;
-                case NX_KEYTYPE_NEXT:
-                case NX_KEYTYPE_FAST:
-                    [endel nextTrack];
-                    break;
-                case NX_KEYTYPE_PREVIOUS:
-                case NX_KEYTYPE_REWIND:
-                    [endel previousTrack];
-                    break;
-            }
+        case NX_KEYTYPE_PREVIOUS:
+        case NX_KEYTYPE_REWIND:
+            // Apple Music uses backTrack; Spotify and Endel use previousTrack
+            action = (appType == AppTypeMusic) ? @selector(backTrack) : @selector(previousTrack);
             break;
-        }
+    }
+
+    if (action)
+    {
+        // Use performSelector to send the command via ScriptingBridge Apple Events
+        // without needing the typed class to be resolved at link time
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [app performSelector:action];
+#pragma clang diagnostic pop
     }
 }
 
 static BOOL isAppPlaying(SBApplication *app, AppType appType)
 {
+    (void)appType; // all app types use the same four-char code for playerState
     if (![app isRunning]) return NO;
 
-    switch (appType)
+    @try
     {
-        case AppTypeSpotify:
-            return ((SpotifyApplication *)app).playerState == SpotifyEPlSPlaying;
-        case AppTypeMusic:
-            return ((iTunesApplication *)app).playerState == iTunesEPlSPlaying;
-        case AppTypeEndel:
-            return ((EndelApplication *)app).playerState == EndelEPlSPlaying;
+        // Use propertyWithCode to get playerState via Apple Events directly.
+        // 'pPlS' is the AE property code for player state; 'kPSP' means playing.
+        SBObject *stateObj = [(SBObject *)app propertyWithCode:'pPlS'];
+        id stateValue = [stateObj get];
+        if ([stateValue isKindOfClass:[NSAppleEventDescriptor class]])
+        {
+            return [(NSAppleEventDescriptor *)stateValue enumCodeValue] == 'kPSP';
+        }
+    }
+    @catch (NSException *e)
+    {
+        return NO;
     }
     return NO;
 }
@@ -369,8 +342,6 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
     hideFromMenuBarItem.image = [self menuImageWithSymbol:@"eye.slash"];
     [ menu addItem : [ NSMenuItem separatorItem ] ]; // A thin grey line
 
-    NSMenuItem *donateItem = [ menu addItemWithTitle : NSLocalizedString(@"Donate if you like the app", @"Donate if you like the app") action : @selector(support) keyEquivalent : @"" ];
-    donateItem.image = [self menuImageWithSymbol:@"heart"];
     NSMenuItem *updateItem = [ menu addItemWithTitle : NSLocalizedString(@"Check for updates", @"Check for updates") action : @selector(update) keyEquivalent : @"" ];
     updateItem.image = [self menuImageWithSymbol:@"arrow.triangle.2.circlepath"];
     NSMenuItem *quitItem = [ menu addItemWithTitle : NSLocalizedString(@"Quit", @"Quit") action : @selector(terminate) keyEquivalent : @"" ];
@@ -449,11 +420,6 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 - ( void ) terminate
 {
     [ NSApp terminate : nil ];
-}
-
-- ( void ) support
-{
-    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString: @"https://paypal.me/milgra"]];
 }
 
 - ( void ) update
