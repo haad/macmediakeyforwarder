@@ -1,10 +1,10 @@
 # Mac Media Key Forwarder [![Build Status](https://travis-ci.org/milgra/macmediakeyforwarder.svg?branch=master)](https://travis-ci.org/milgra/macmediakeyforwarder#)
 
-Mac Media Key Forwarder for [iTunes](https://www.apple.com/itunes/) and [Spotify](http://www.spotify.com).
+Mac Media Key Forwarder for [Spotify](http://www.spotify.com), [Apple Music](https://www.apple.com/apple-music/), and [Endel](https://endel.io).
 
-Forwards media keys to iTunes or Spotify directly.
+Forwards media keys to Spotify, Apple Music, or Endel directly.
 
-You can prioritize which app you would like to control or you can go with the default behaviour which controls the running app.
+You can choose which app to use as your secondary player, or go with the default behaviour which controls the running app. Endel is always given highest priority when running.
 
 The app runs in the menu bar.
 
@@ -20,16 +20,14 @@ The app listens on the event tap for key events. This causes problems in some ra
 
 In these cases simply pause Mac Media Key Forwarder from it's menu.
 
-**Installation & MacOS Mojave Compatibility**
+**Installation & Permissions**
 
-The app itself is compatible with Mojave, but you need to add it as trusted application in order to make it function properly.
+You need to grant the app Accessibility and Automation permissions to make it function properly.
 
 You can do this with these steps:
-1. Go to **System Preferences** > **Security & Privacy**
-2. Open the **Privacy** tab, and look for **Accessibility** in the left list
-3. Turn on the checkbox for **MacMediaKeyForwarder.app** in the right list
-2. Look for **Automation** in the left list
-3. Turn on the checkbox for **iTunes.app** and **Spotifiy.app** under **MacMediaKeyForwarder.app** in the right list
+1. Go to **System Settings** > **Privacy & Security**
+2. Look for **Accessibility** and turn on the toggle for **MacMediaKeyForwarder.app**
+3. Look for **Automation** and turn on the toggles for **Spotify.app**, **Music.app**, and **Endel.app** under **MacMediaKeyForwarder.app**
 4. Run the app again
 
 ![Security Setting](security_a.png)
@@ -70,6 +68,13 @@ You can do this with these steps:
 Thank you!!!
 
 ---
+
+*What's new in version 4.0 :*
+- macOS Tahoe (macOS 26) Liquid Glass design refresh
+- SF Symbol icons on all menu items and status bar
+- Added Endel as a supported player (highest priority when running)
+- Choose between Spotify or Apple Music as secondary player
+- Updated permissions instructions for System Settings
 
 *What's new in version 3.1.2 :*
 - Lower minimum version to macOS 10.14
