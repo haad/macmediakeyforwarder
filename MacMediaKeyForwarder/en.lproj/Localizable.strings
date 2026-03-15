@@ -1,4 +1,4 @@
-/* 
+/*
   Localizable.strings
   MacMediaKeyForwarder
 
@@ -6,14 +6,14 @@
   Copyright © 2017년 Milan Toth. All rights reserved.
 */
 
-"Send events to both players" = "Send events to both players";
+"Use Spotify as secondary player" = "Use Spotify as secondary player";
+"Use Apple Music as secondary player" = "Use Apple Music as secondary player";
 "Open at login" = "Open at login";
-"Prioritize iTunes" = "Prioritize iTunes";
-"Prioritize Spotify" = "Prioritize Spotify";
 "Pause" = "Pause";
 "Pause if no player is running" = "Pause if no player is running";
 "Donate if you like the app" = "Donate if you like the app";
 "Check for updates" = "Check for updates";
 "Quit" = "Quit";
+"Hide from menu bar" = "Hide from menu bar";
 "OK" = "OK";
 "Cancel" = "Cancel";

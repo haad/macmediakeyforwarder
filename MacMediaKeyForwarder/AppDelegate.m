@@ -2,17 +2,21 @@
 #import "GBLaunchAtLogin.h"
 #import "iTunes.h"
 #import "Spotify.h"
+#import "Endel.h"
 #import <CoreServices/CoreServices.h>
 #import <ScriptingBridge/ScriptingBridge.h>
 
-typedef NS_ENUM(NSInteger, MediaKeysPrioritize)
+typedef NS_ENUM(NSInteger, AppType)
 {
-    // Normal behavior (without priority; send events to iTunes and Spotify if both are open)
-    MediaKeysPrioritizeNone,
-    // If both apps are open, prioritize iTunes over Spotify
-    MediaKeysPrioritizeITunes,
-    // If both apps are open, prioritize Spotify over iTunes
-    MediaKeysPrioritizeSpotify
+    AppTypeSpotify,
+    AppTypeMusic,
+    AppTypeEndel,
+};
+
+typedef NS_ENUM(NSInteger, SecondaryApp)
+{
+    SecondaryAppSpotify,   // Use Spotify as secondary (default)
+    SecondaryAppMusic,     // Use Apple Music as secondary
 };
 
 typedef NS_ENUM(NSInteger, PauseState)
@@ -38,7 +42,7 @@ static NSString *kUserDefaultsHideFromMenuBarOptionKey = @"user_hide_from_menu_b
 
 PauseState pauseState;
 KeyHoldState keyHoldStatus;
-MediaKeysPrioritize mediaKeysPriority;
+SecondaryApp secondaryApp;
 
 @interface AppDelegate ()
 {
@@ -55,28 +59,108 @@ MediaKeysPrioritize mediaKeysPriority;
 
 @implementation AppDelegate
 
+static void sendKeyToApp(SBApplication *app, AppType appType, int keyCode)
+{
+    switch (appType)
+    {
+        case AppTypeSpotify:
+        {
+            SpotifyApplication *spotify = (SpotifyApplication *)app;
+            switch (keyCode)
+            {
+                case NX_KEYTYPE_PLAY:
+                    [spotify playpause];
+                    break;
+                case NX_KEYTYPE_NEXT:
+                case NX_KEYTYPE_FAST:
+                    [spotify nextTrack];
+                    break;
+                case NX_KEYTYPE_PREVIOUS:
+                case NX_KEYTYPE_REWIND:
+                    [spotify previousTrack];
+                    break;
+            }
+            break;
+        }
+        case AppTypeMusic:
+        {
+            iTunesApplication *music = (iTunesApplication *)app;
+            switch (keyCode)
+            {
+                case NX_KEYTYPE_PLAY:
+                    [music playpause];
+                    break;
+                case NX_KEYTYPE_NEXT:
+                case NX_KEYTYPE_FAST:
+                    [music nextTrack];
+                    break;
+                case NX_KEYTYPE_PREVIOUS:
+                case NX_KEYTYPE_REWIND:
+                    [music backTrack];
+                    break;
+            }
+            break;
+        }
+        case AppTypeEndel:
+        {
+            EndelApplication *endel = (EndelApplication *)app;
+            switch (keyCode)
+            {
+                case NX_KEYTYPE_PLAY:
+                    [endel playpause];
+                    break;
+                case NX_KEYTYPE_NEXT:
+                case NX_KEYTYPE_FAST:
+                    [endel nextTrack];
+                    break;
+                case NX_KEYTYPE_PREVIOUS:
+                case NX_KEYTYPE_REWIND:
+                    [endel previousTrack];
+                    break;
+            }
+            break;
+        }
+    }
+}
+
+static BOOL isAppPlaying(SBApplication *app, AppType appType)
+{
+    if (![app isRunning]) return NO;
+
+    switch (appType)
+    {
+        case AppTypeSpotify:
+            return ((SpotifyApplication *)app).playerState == SpotifyEPlSPlaying;
+        case AppTypeMusic:
+            return ((iTunesApplication *)app).playerState == iTunesEPlSPlaying;
+        case AppTypeEndel:
+            return ((EndelApplication *)app).playerState == EndelEPlSPlaying;
+    }
+    return NO;
+}
+
 static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon)
 {
     @autoreleasepool
     {
         AppDelegate *self = (__bridge id)refcon;
-        
+
         if(type == kCGEventTapDisabledByTimeout)
         {
             CGEventTapEnable(self->eventPort, TRUE);
             return event;
         }
-        
+
         if(type == kCGEventTapDisabledByUserInput)
         {
             return event;
         }
-        
+
         if(type != NX_SYSDEFINED )
         {
             return event;
         }
-        
+
         NSEvent *nsEvent = nil;
         @try
         {
@@ -86,14 +170,14 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
         {
             return event;
         }
-        
+
         if([nsEvent subtype] != 8)
         {
             return event;
         }
-        
+
         int keyCode = (([nsEvent data1] & 0xFFFF0000) >> 16);
-        
+
         if (keyCode != NX_KEYTYPE_PLAY &&
             keyCode != NX_KEYTYPE_FAST &&
             keyCode != NX_KEYTYPE_REWIND &&
@@ -102,18 +186,19 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
         {
             return event;
         }
-        
-        iTunesApplication *iTunes = [SBApplication applicationWithBundleIdentifier:[self iTunesBundleIdentifier]];
-        SpotifyApplication *spotify = [SBApplication applicationWithBundleIdentifier:@"com.spotify.client"];
-        
+
+        SBApplication *spotify = [SBApplication applicationWithBundleIdentifier:@"com.spotify.client"];
+        SBApplication *music = [SBApplication applicationWithBundleIdentifier:@"com.apple.music"];
+        SBApplication *endel = [SBApplication applicationWithBundleIdentifier:@"com.endel.endel"];
+
         if ( pauseState == PauseStatePause )
         {
             return event;
         }
-        
+
         if ( pauseState == PauseStateAutomatic )
         {
-            if (![spotify isRunning ] && ![iTunes isRunning ] )
+            if (![spotify isRunning] && ![music isRunning] && ![endel isRunning])
             {
                 return event;
             }
@@ -121,160 +206,99 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 
         int keyFlags = ([nsEvent data1] & 0x0000FFFF);
         BOOL keyIsPressed = (((keyFlags & 0xFF00) >> 8)) == 0xA;
-        
+
         if (keyIsPressed)
         {
-            switch ( mediaKeysPriority )
-            {
-                case MediaKeysPrioritizeITunes:
-                {
-                    switch (keyCode)
-                    {
-                        case NX_KEYTYPE_PLAY:
-                        {
-                            [iTunes playpause];
-                            break;
-                        }
-                        default:
-                        {
-                            if (keyHoldStatus == KeyHoldStateNone)
-                            {
-                                keyHoldStatus = KeyHoldStateWaiting;
-                            }
-                            else if (keyHoldStatus == KeyHoldStateWaiting)
-                            {
-                                keyHoldStatus = KeyHoldStateHolding;
-                                switch (keyCode)
-                                {
-                                    case NX_KEYTYPE_NEXT:
-                                    case NX_KEYTYPE_FAST:
-                                    {
-                                        [iTunes fastForward];
-                                        break;
-                                    }
-                                    case NX_KEYTYPE_PREVIOUS:
-                                    case NX_KEYTYPE_REWIND:
-                                    {
-                                        [iTunes rewind];
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
-                case MediaKeysPrioritizeSpotify:
-                {
-                    switch (keyCode)
-                    {
-                        case NX_KEYTYPE_PLAY:
-                        {
-                            [spotify playpause];
-                            break;
-                        }
-                        case NX_KEYTYPE_NEXT:
-                        case NX_KEYTYPE_FAST:
-                        {
-                            [spotify nextTrack];
-                            break;
-                        };
-                        case NX_KEYTYPE_PREVIOUS:
-                        case NX_KEYTYPE_REWIND:
-                        {
-                            [spotify previousTrack];
-                            break;
-                        }
-                    }
-                    break;
-                }
-                case MediaKeysPrioritizeNone:
-                {
-                    switch (keyCode)
-                    {
-                        case NX_KEYTYPE_PLAY:
-                        {
-                            if ( [spotify isRunning ] ) [spotify playpause];
-                            if ( [iTunes isRunning ] ) [iTunes playpause];
-                            break;
-                        }
-                        case NX_KEYTYPE_NEXT:
-                        case NX_KEYTYPE_FAST:
-                        {
-                            if ( [spotify isRunning ] ) [spotify nextTrack];
-                            if ( [iTunes isRunning ] ) [iTunes nextTrack];
-                            break;
-                        }
-                        case NX_KEYTYPE_PREVIOUS:
-                        case NX_KEYTYPE_REWIND:
-                        {
-                            if ( [spotify isRunning ] ) [spotify previousTrack];
-                            if ( [iTunes isRunning ] ) [iTunes backTrack];
-                            break;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        else
-        {
-            switch (keyHoldStatus)
-            {
-                case KeyHoldStateWaiting:
-                {
-                    if (mediaKeysPriority == MediaKeysPrioritizeITunes)
-                    {
-                        switch (keyCode)
-                        {
-                            case NX_KEYTYPE_NEXT:
-                            case NX_KEYTYPE_FAST:
-                            {
-                                [iTunes nextTrack];
-                                break;
-                            }
-                            case NX_KEYTYPE_PREVIOUS:
-                            case NX_KEYTYPE_REWIND:
-                            {
-                                [iTunes backTrack];
-                                break;
-                            }
-                        }
-                    }
-                    break;
-                }
-                case KeyHoldStateHolding:
-                {
-                    // Stop fast forwarding / rewinding
-                    
-                    if (mediaKeysPriority == MediaKeysPrioritizeITunes)
-                    {
-                        [iTunes resume];
-                    }
-                    break;
-                }
-                case KeyHoldStateNone:
-                {
-                    break;
-                }
-            }
-            keyHoldStatus = KeyHoldStateNone;
-        }
-        
-        // stop propagation
-        
-        return NULL;
-    }
-}
+            // Build arrays of playing and running apps (with parallel type tracking)
+            NSMutableArray *playingApps = [NSMutableArray array];
+            NSMutableArray *playingTypes = [NSMutableArray array];
+            NSMutableArray *runningApps = [NSMutableArray array];
+            NSMutableArray *runningTypes = [NSMutableArray array];
 
-- (NSString *)iTunesBundleIdentifier {
-    if ( @available(macOS 10.15, *) )
-    {
-        return @"com.apple.music";
-    }
-    else
-    {
-        return @"com.apple.iTunes";
+            if ([endel isRunning])
+            {
+                [runningApps addObject:endel];
+                [runningTypes addObject:@(AppTypeEndel)];
+                if (isAppPlaying(endel, AppTypeEndel))
+                {
+                    [playingApps addObject:endel];
+                    [playingTypes addObject:@(AppTypeEndel)];
+                }
+            }
+
+            // Determine which is the configured secondary app
+            SBApplication *secondaryAppInstance = nil;
+            AppType secondaryAppType;
+            if (secondaryApp == SecondaryAppSpotify)
+            {
+                secondaryAppInstance = spotify;
+                secondaryAppType = AppTypeSpotify;
+            }
+            else
+            {
+                secondaryAppInstance = music;
+                secondaryAppType = AppTypeMusic;
+            }
+
+            // Also check the non-configured one for playing state
+            SBApplication *otherAppInstance = nil;
+            AppType otherAppType;
+            if (secondaryApp == SecondaryAppSpotify)
+            {
+                otherAppInstance = music;
+                otherAppType = AppTypeMusic;
+            }
+            else
+            {
+                otherAppInstance = spotify;
+                otherAppType = AppTypeSpotify;
+            }
+
+            if ([secondaryAppInstance isRunning])
+            {
+                [runningApps addObject:secondaryAppInstance];
+                [runningTypes addObject:@(secondaryAppType)];
+                if (isAppPlaying(secondaryAppInstance, secondaryAppType))
+                {
+                    [playingApps addObject:secondaryAppInstance];
+                    [playingTypes addObject:@(secondaryAppType)];
+                }
+            }
+            if ([otherAppInstance isRunning])
+            {
+                [runningApps addObject:otherAppInstance];
+                [runningTypes addObject:@(otherAppType)];
+                if (isAppPlaying(otherAppInstance, otherAppType))
+                {
+                    [playingApps addObject:otherAppInstance];
+                    [playingTypes addObject:@(otherAppType)];
+                }
+            }
+
+            if ([playingApps count] > 0)
+            {
+                // Send to all playing apps
+                for (NSUInteger i = 0; i < [playingApps count]; i++)
+                {
+                    sendKeyToApp(playingApps[i], (AppType)[playingTypes[i] integerValue], keyCode);
+                }
+            }
+            else if ([runningApps count] > 0)
+            {
+                // Send to running apps in priority order: Endel > secondary
+                // Just send to the first running app (Endel is added first)
+                sendKeyToApp(runningApps[0], (AppType)[runningTypes[0] integerValue], keyCode);
+            }
+            else
+            {
+                // No app running - launch the configured secondary app (never Endel)
+                sendKeyToApp(secondaryAppInstance, secondaryAppType, keyCode);
+            }
+        }
+
+        // stop propagation
+
+        return NULL;
     }
 }
 
@@ -286,79 +310,89 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 - ( void ) applicationDidFinishLaunching : ( NSNotification*) theNotification
 {
     // init containers
-    
+
     priorityOptionItems = [[NSMutableArray alloc] init];
     pauseOptionItems = [[NSMutableArray alloc] init];
-    
+
     // init states
-    
+
     pauseState = PauseStateNone;
     keyHoldStatus = KeyHoldStateNone;
-    mediaKeysPriority = MediaKeysPrioritizeNone;
-    
+    secondaryApp = SecondaryAppSpotify;
+
     NSNumber *option = [[NSUserDefaults standardUserDefaults] objectForKey:kUserDefaultsPriorityOptionKey];
     if ( option )
     {
-        mediaKeysPriority = [option integerValue];
+        secondaryApp = [option integerValue];
     }
-    
+
     option = [[NSUserDefaults standardUserDefaults] objectForKey:kUserDefaultsPauseOptionKey];
     if ( option )
     {
         pauseState = [option integerValue];
     }
-    
+
     // Version string
-    
+
     NSDictionary *bundleInfo = [[NSBundle mainBundle] infoDictionary];
     NSString *versionString = [NSString stringWithFormat:@"Version %@ (build %@)",
                                bundleInfo[@"CFBundleShortVersionString"],
                                bundleInfo[@"CFBundleVersion"] ];
-    
+
     NSMenu *menu = [ [ NSMenu alloc ] init ];
     [ menu setDelegate : self ];
-    [ menu addItemWithTitle : versionString action : nil keyEquivalent : @"" ];
+    NSMenuItem *versionItem = [ menu addItemWithTitle : versionString action : nil keyEquivalent : @"" ];
+    versionItem.image = [self menuImageWithSymbol:@"info.circle"];
     [ menu addItem : [ NSMenuItem separatorItem ] ]; // A thin grey line
-    
-    [pauseOptionItems addObject:[ menu addItemWithTitle: NSLocalizedString(@"Pause", @"Pause") action : @selector(manualPause) keyEquivalent : @"" ]];
-    [pauseOptionItems addObject:[ menu addItemWithTitle: NSLocalizedString(@"Pause if no player is running", @"Pause if no player is running") action : @selector(autoPause) keyEquivalent : @"" ]];
-    
+
+    NSMenuItem *pauseItem = [ menu addItemWithTitle: NSLocalizedString(@"Pause", @"Pause") action : @selector(manualPause) keyEquivalent : @"" ];
+    pauseItem.image = [self menuImageWithSymbol:@"pause.circle"];
+    [pauseOptionItems addObject:pauseItem];
+    NSMenuItem *autoPauseItem = [ menu addItemWithTitle: NSLocalizedString(@"Pause if no player is running", @"Pause if no player is running") action : @selector(autoPause) keyEquivalent : @"" ];
+    autoPauseItem.image = [self menuImageWithSymbol:@"pause.circle.fill"];
+    [pauseOptionItems addObject:autoPauseItem];
+
     [ menu addItem : [ NSMenuItem separatorItem ] ]; // A thin grey line
-    
-    [priorityOptionItems addObject:[ menu addItemWithTitle: NSLocalizedString(@"Send events to both players", @"Send events to both players") action : @selector(prioritizeNone) keyEquivalent : @"" ]];
-    [priorityOptionItems addObject:[ menu addItemWithTitle: NSLocalizedString(@"Prioritize iTunes", @"Prioritize iTunes") action : @selector(prioritizeITunes) keyEquivalent : @"" ]];
-    [priorityOptionItems addObject:[ menu addItemWithTitle: NSLocalizedString(@"Prioritize Spotify", @"Prioritize Spotify") action : @selector(prioritizeSpotify) keyEquivalent : @"" ]];
+
+    NSMenuItem *spotifyItem = [ menu addItemWithTitle: NSLocalizedString(@"Use Spotify as secondary player", @"Use Spotify as secondary player") action : @selector(selectSpotifySecondary) keyEquivalent : @"" ];
+    spotifyItem.image = [self menuImageWithSymbol:@"music.note"];
+    [priorityOptionItems addObject:spotifyItem];
+    NSMenuItem *musicItem = [ menu addItemWithTitle: NSLocalizedString(@"Use Apple Music as secondary player", @"Use Apple Music as secondary player") action : @selector(selectMusicSecondary) keyEquivalent : @"" ];
+    musicItem.image = [self menuImageWithSymbol:@"music.quarternote.3"];
+    [priorityOptionItems addObject:musicItem];
 
     [ menu addItem : [ NSMenuItem separatorItem ] ]; // A thin grey line
 
     startupItem = [ menu addItemWithTitle:NSLocalizedString(@"Open at login", @"Open at login") action:@selector(toggleStartupItem) keyEquivalent:@""];
+    startupItem.image = [self menuImageWithSymbol:@"arrow.right.circle"];
     hideFromMenuBarItem = [ menu addItemWithTitle:NSLocalizedString(@"Hide from menu bar", @"Hide from menu bar") action:@selector(hideFromMenuBar) keyEquivalent:@""];
+    hideFromMenuBarItem.image = [self menuImageWithSymbol:@"eye.slash"];
     [ menu addItem : [ NSMenuItem separatorItem ] ]; // A thin grey line
 
-    [ menu addItem : [ NSMenuItem separatorItem ] ]; // A thin grey line
-    
-    [ menu addItemWithTitle : NSLocalizedString(@"Donate if you like the app", @"Donate if you like the app") action : @selector(support) keyEquivalent : @"" ];
-    [ menu addItemWithTitle : NSLocalizedString(@"Check for updates", @"Check for updates") action : @selector(update) keyEquivalent : @"" ];
-    [ menu addItemWithTitle : NSLocalizedString(@"Quit", @"Quit") action : @selector(terminate) keyEquivalent : @"" ];
-    
-    NSImage* image = [ NSImage imageNamed : @"icon" ];
-    [ image setTemplate : YES ];
-    
+    NSMenuItem *donateItem = [ menu addItemWithTitle : NSLocalizedString(@"Donate if you like the app", @"Donate if you like the app") action : @selector(support) keyEquivalent : @"" ];
+    donateItem.image = [self menuImageWithSymbol:@"heart"];
+    NSMenuItem *updateItem = [ menu addItemWithTitle : NSLocalizedString(@"Check for updates", @"Check for updates") action : @selector(update) keyEquivalent : @"" ];
+    updateItem.image = [self menuImageWithSymbol:@"arrow.triangle.2.circlepath"];
+    NSMenuItem *quitItem = [ menu addItemWithTitle : NSLocalizedString(@"Quit", @"Quit") action : @selector(terminate) keyEquivalent : @"" ];
+    quitItem.image = [self menuImageWithSymbol:@"xmark.circle"];
+
+    NSImage *image = [NSImage imageWithSystemSymbolName:@"forward.fill" accessibilityDescription:@"Mac Media Key Forwarder"];
+
     statusItem = [ [ NSStatusBar systemStatusBar ] statusItemWithLength : NSVariableStatusItemLength ];
-    [ statusItem setToolTip : @"Mac Media Key Forwarder" ];
-    [ statusItem setMenu : menu ];
-    [ statusItem setImage : image ];
+    statusItem.button.image = image;
+    statusItem.button.toolTip = @"Mac Media Key Forwarder";
+    statusItem.menu = menu;
     [ statusItem setBehavior : NSStatusItemBehaviorRemovalAllowed ];
     if ([self shouldHideFromMenuBar]) {
         [ statusItem setVisible : NO ];
     } else {
         [ statusItem setVisible : YES ];
     }
-    
+
     [self updateStartupItemState];
     [self updatePauseState];
     [self updateOptionState];
-    
+
     eventPort = CGEventTapCreate( kCGSessionEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault, CGEventMaskBit(NX_SYSDEFINED), tapEventCallback, (__bridge void * _Nullable)(self));
     if ( eventPort == NULL )
     {
@@ -369,16 +403,16 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
     {
 
 		eventPortSource = CFMachPortCreateRunLoopSource( kCFAllocatorSystemDefault, eventPort, 0 );
-		
+
 		[self startEventSession];
-		
+
 	}
 	else
 	{
-		
+
 		NSAlert *alert = [[NSAlert alloc] init];
 		[alert setMessageText:@"Error"];
-		[alert setInformativeText:@"Cannot start event listening. Please add Mac Media Key Forwarder to the \"Security & Privacy\" pane in System Preferences. Check \"Accessibility\" and \"Automation\" under the \"Privacy\" tab."];
+		[alert setInformativeText:@"Cannot start event listening. Please add Mac Media Key Forwarder to the \"Privacy & Security\" pane in System Settings."];
 		[alert addButtonWithTitle:@"Ok"];
 		[alert runModal];
 
@@ -394,7 +428,7 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
         [self setHideFromMenuBar:NO];
         [statusItem setVisible: YES];
     }
-    
+
     return YES;
 }
 
@@ -402,7 +436,6 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 {
     if (pauseState != PauseStatePause && !CFRunLoopContainsSource(CFRunLoopGetCurrent(), eventPortSource, kCFRunLoopCommonModes)) {
         CFRunLoopAddSource( CFRunLoopGetCurrent(), eventPortSource, kCFRunLoopCommonModes );
-        CFRunLoopRun();
     }
 }
 
@@ -410,7 +443,6 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 {
     if (CFRunLoopContainsSource(CFRunLoopGetCurrent(), eventPortSource, kCFRunLoopCommonModes)) {
         CFRunLoopRemoveSource( CFRunLoopGetCurrent(), eventPortSource, kCFRunLoopCommonModes );
-        CFRunLoopStop(CFRunLoopGetCurrent());
     }
 }
 
@@ -430,26 +462,19 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 }
 
 
-#pragma mark - App priorization
+#pragma mark - Secondary app selection
 
-- (void)prioritizeNone
+- (void)selectSpotifySecondary
 {
-    mediaKeysPriority = MediaKeysPrioritizeNone;
-    [[NSUserDefaults standardUserDefaults] setObject:@(mediaKeysPriority) forKey:kUserDefaultsPriorityOptionKey];
+    secondaryApp = SecondaryAppSpotify;
+    [[NSUserDefaults standardUserDefaults] setObject:@(secondaryApp) forKey:kUserDefaultsPriorityOptionKey];
     [self updateOptionState];
 }
 
-- (void)prioritizeITunes
+- (void)selectMusicSecondary
 {
-    mediaKeysPriority = MediaKeysPrioritizeITunes;
-    [[NSUserDefaults standardUserDefaults] setObject:@(mediaKeysPriority) forKey:kUserDefaultsPriorityOptionKey];
-    [self updateOptionState];
-}
-
-- (void)prioritizeSpotify
-{
-    mediaKeysPriority = MediaKeysPrioritizeSpotify;
-    [[NSUserDefaults standardUserDefaults] setObject:@(mediaKeysPriority) forKey:kUserDefaultsPriorityOptionKey];
+    secondaryApp = SecondaryAppMusic;
+    [[NSUserDefaults standardUserDefaults] setObject:@(secondaryApp) forKey:kUserDefaultsPriorityOptionKey];
     [self updateOptionState];
 }
 
@@ -482,7 +507,7 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
     }
     [[NSUserDefaults standardUserDefaults] setObject:@(pauseState) forKey:kUserDefaultsPauseOptionKey];
     [self updatePauseState];
-    
+
     [self startEventSession];
 }
 
@@ -494,18 +519,18 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
     else {
         [GBLaunchAtLogin addAppAsLoginItem];
     }
-    
+
     [self updateStartupItemState];
 }
 
 - (void)hideFromMenuBar
 {
     [self setHideFromMenuBar:YES];
-    
+
     if ([GBLaunchAtLogin isLoginItem] == NO) {
         [GBLaunchAtLogin addAppAsLoginItem];
     }
-    
+
     [statusItem setVisible: NO];
 }
 
@@ -523,20 +548,20 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 
 - (void)updateOptionState
 {
-    // Verify if a choice was selected, otherwise mark "None" as the default
-    
+    // Verify if a choice was selected, otherwise mark Spotify as the default
+
     NSNumber *option = [[NSUserDefaults standardUserDefaults] valueForKey:kUserDefaultsPriorityOptionKey];
     if ( option )
     {
-        mediaKeysPriority = [option integerValue];
+        secondaryApp = [option integerValue];
     }
-    
+
     // Mark with a tick the selected item from priority options
-    
+
     for ( NSUInteger index = 0, num = priorityOptionItems.count; index < num; index++ )
     {
         NSMenuItem *item = priorityOptionItems[index];
-        [item setState:( index == mediaKeysPriority ? NSControlStateValueOn : NSControlStateValueOff )];
+        [item setState:( index == secondaryApp ? NSControlStateValueOn : NSControlStateValueOff )];
     }
 }
 
@@ -544,7 +569,7 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
 {
     NSMenuItem *item0 = pauseOptionItems[0];
     NSMenuItem *item1 = pauseOptionItems[1];
-    
+
     [item0 setState: pauseState == PauseStatePause ? NSControlStateValueOn : NSControlStateValueOff];
     [item1 setState: pauseState == PauseStateAutomatic ? NSControlStateValueOn : NSControlStateValueOff];
 }
@@ -558,11 +583,11 @@ static CGEventRef tapEventCallback(CGEventTapProxy proxy, CGEventType type, CGEv
     [self updateStartupItemState];
 }
 
+- (NSImage *)menuImageWithSymbol:(NSString *)symbolName
+{
+    NSImage *image = [NSImage imageWithSystemSymbolName:symbolName accessibilityDescription:nil];
+    NSImageSymbolConfiguration *config = [NSImageSymbolConfiguration configurationWithPointSize:14 weight:NSFontWeightRegular];
+    return [image imageWithSymbolConfiguration:config];
+}
 
 @end
-
-
-
-
-
-

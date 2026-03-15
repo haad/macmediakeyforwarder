@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 46;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -23,6 +23,7 @@
 
 /* Begin PBXFileReference section */
 		112AF55920263497006937BF /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		AA1E2F3B2D4A8B0000ENDEL1 /* Endel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Endel.h; sourceTree = "<group>"; };
 		2C9625F520295D9F00F0C47E /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		330630112313ED7500ACFBFE /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		330630122313ED8100ACFBFE /* fi */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fi; path = fi.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -107,6 +108,7 @@
 			children = (
 				33CD48C11F866DC6000C454F /* iTunes.h */,
 				337268BF1F8BA311007284E3 /* Spotify.h */,
+				AA1E2F3B2D4A8B0000ENDEL1 /* Endel.h */,
 				336F744B1E07E136009BCC1B /* AppDelegate.h */,
 				336F744C1E07E136009BCC1B /* AppDelegate.m */,
 				336F744E1E07E136009BCC1B /* Supporting Files */,
@@ -171,12 +173,10 @@
 			isa = PBXProject;
 			attributes = {
 				LastUpgradeCheck = 1330;
-				ORGANIZATIONNAME = "Milan Toth";
+				ORGANIZATIONNAME = "Adam Hamsik";
 				TargetAttributes = {
 					336F74471E07E136009BCC1B = {
 						CreatedOnToolsVersion = 8.2;
-						DevelopmentTeam = 9K3SQ64X5H;
-						ProvisioningStyle = Manual;
 						SystemCapabilities = {
 							com.apple.Sandbox = {
 								enabled = 0;
@@ -186,7 +186,6 @@
 				};
 			};
 			buildConfigurationList = 336F74431E07E136009BCC1B /* Build configuration list for PBXProject "MacMediaKeyForwarder" */;
-			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -205,6 +204,7 @@
 				fr,
 			);
 			mainGroup = 336F743F1E07E136009BCC1B;
+			preferredProjectObjectVersion = 77;
 			productRefGroup = 336F74491E07E136009BCC1B /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -324,7 +324,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 12.3;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
@@ -375,7 +375,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 12.3;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
 			};
@@ -386,17 +386,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_IDENTITY = "-";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Mac Developer";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 9K3SQ64X5H;
+				DEVELOPMENT_TEAM = 9478A8FXT3;
 				INFOPLIST_FILE = MacMediaKeyForwarder/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 3.1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.milgra.hsmke;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				ARCHS = arm64;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 4.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.haad.macmediakeyforwarder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
@@ -407,17 +410,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_IDENTITY = "-";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Mac Developer";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 9K3SQ64X5H;
+				DEVELOPMENT_TEAM = 9478A8FXT3;
 				INFOPLIST_FILE = MacMediaKeyForwarder/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 3.1.2;
-				PRODUCT_BUNDLE_IDENTIFIER = com.milgra.hsmke;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				ARCHS = arm64;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 4.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.haad.macmediakeyforwarder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 			};
