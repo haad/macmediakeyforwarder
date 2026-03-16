@@ -61,53 +61,80 @@ SecondaryApp secondaryApp;
 
 static void sendKeyToApp(SBApplication *app, AppType appType, int keyCode)
 {
-    SEL action = nil;
-    switch (keyCode)
+    switch (appType)
     {
-        case NX_KEYTYPE_PLAY:
-            action = @selector(playpause);
+        case AppTypeSpotify:
+        {
+            SpotifyApplication *spotify = (SpotifyApplication *)app;
+            switch (keyCode)
+            {
+                case NX_KEYTYPE_PLAY:
+                    [spotify playpause];
+                    break;
+                case NX_KEYTYPE_NEXT:
+                case NX_KEYTYPE_FAST:
+                    [spotify nextTrack];
+                    break;
+                case NX_KEYTYPE_PREVIOUS:
+                case NX_KEYTYPE_REWIND:
+                    [spotify previousTrack];
+                    break;
+            }
             break;
-        case NX_KEYTYPE_NEXT:
-        case NX_KEYTYPE_FAST:
-            action = @selector(nextTrack);
+        }
+        case AppTypeMusic:
+        {
+            iTunesApplication *music = (iTunesApplication *)app;
+            switch (keyCode)
+            {
+                case NX_KEYTYPE_PLAY:
+                    [music playpause];
+                    break;
+                case NX_KEYTYPE_NEXT:
+                case NX_KEYTYPE_FAST:
+                    [music nextTrack];
+                    break;
+                case NX_KEYTYPE_PREVIOUS:
+                case NX_KEYTYPE_REWIND:
+                    [music backTrack];
+                    break;
+            }
             break;
-        case NX_KEYTYPE_PREVIOUS:
-        case NX_KEYTYPE_REWIND:
-            // Apple Music uses backTrack; Spotify and Endel use previousTrack
-            action = (appType == AppTypeMusic) ? @selector(backTrack) : @selector(previousTrack);
+        }
+        case AppTypeEndel:
+        {
+            EndelApplication *endel = (EndelApplication *)app;
+            switch (keyCode)
+            {
+                case NX_KEYTYPE_PLAY:
+                    [endel playpause];
+                    break;
+                case NX_KEYTYPE_NEXT:
+                case NX_KEYTYPE_FAST:
+                    [endel nextTrack];
+                    break;
+                case NX_KEYTYPE_PREVIOUS:
+                case NX_KEYTYPE_REWIND:
+                    [endel previousTrack];
+                    break;
+            }
             break;
-    }
-
-    if (action)
-    {
-        // Use performSelector to send the command via ScriptingBridge Apple Events
-        // without needing the typed class to be resolved at link time
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-        [app performSelector:action];
-#pragma clang diagnostic pop
+        }
     }
 }
 
 static BOOL isAppPlaying(SBApplication *app, AppType appType)
 {
-    (void)appType; // all app types use the same four-char code for playerState
     if (![app isRunning]) return NO;
 
-    @try
+    switch (appType)
     {
-        // Use propertyWithCode to get playerState via Apple Events directly.
-        // 'pPlS' is the AE property code for player state; 'kPSP' means playing.
-        SBObject *stateObj = [(SBObject *)app propertyWithCode:'pPlS'];
-        id stateValue = [stateObj get];
-        if ([stateValue isKindOfClass:[NSAppleEventDescriptor class]])
-        {
-            return [(NSAppleEventDescriptor *)stateValue enumCodeValue] == 'kPSP';
-        }
-    }
-    @catch (NSException *e)
-    {
-        return NO;
+        case AppTypeSpotify:
+            return ((SpotifyApplication *)app).playerState == SpotifyEPlSPlaying;
+        case AppTypeMusic:
+            return ((iTunesApplication *)app).playerState == iTunesEPlSPlaying;
+        case AppTypeEndel:
+            return ((EndelApplication *)app).playerState == EndelEPlSPlaying;
     }
     return NO;
 }
